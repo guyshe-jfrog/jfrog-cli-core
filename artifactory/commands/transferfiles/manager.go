@@ -19,7 +19,7 @@ import (
 
 const (
 	totalNumberPollingGoRoutines = 2
-	tasksMaxCapacity             = 5000000
+	tasksMaxCapacity             = 10000000
 )
 
 type transferManager struct {
