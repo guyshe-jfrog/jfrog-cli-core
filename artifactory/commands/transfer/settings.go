@@ -44,7 +44,7 @@ func (tst *TransferSettingsCommand) Run() error {
 	}
 
 	// Set the log level value.
-	currLogLevel := tst.getCurrLogLevel(*currSettings)
+	currLogLevel := tst.getCurrLogLevel(currSettings)
 	var logLevel string
 	ioutils.ScanFromConsole("Set the log level (DEBUG, INFO, WARN or ERROR)", &logLevel, currLogLevel)
 	logLevel = strings.ToUpper(logLevel)
@@ -64,22 +64,23 @@ func (tst *TransferSettingsCommand) Run() error {
 	return nil
 }
 
-func (tst *TransferSettingsCommand) getCurrLogLevel(settings utils.TransferSettings) string {
-	currLogLevel := settings.LogLevel
-	if currLogLevel == "" {
-		currLogLevel = os.Getenv(coreutils.LogLevel)
+func (tst *TransferSettingsCommand) getCurrLogLevel(settings *utils.TransferSettings) string {
+	if settings != nil && settings.LogLevel != "" {
+		return settings.LogLevel
 	}
-	if currLogLevel == "" {
-		currLogLevel = "INFO"
+	if os.Getenv(coreutils.LogLevel) != "" {
+		return os.Getenv(coreutils.LogLevel)
 	}
-	return currLogLevel
+	return "INFO"
 }
 
 func (tst *TransferSettingsCommand) validateLogLevelValue(loglevel string) error {
-	if loglevel != "DEBUG" && loglevel != "INFO" && loglevel != "WARN" && loglevel != "ERROR" {
+	switch loglevel {
+	case "DEBUG", "INFO", "WARN", "ERROR":
+		return nil
+	default:
 		return errorutils.CheckErrorf("the log level value is invalid")
 	}
-	return nil
 }
 
 func (tst *TransferSettingsCommand) ServerDetails() (*config.ServerDetails, error) {
