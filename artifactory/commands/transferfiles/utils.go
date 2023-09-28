@@ -341,9 +341,12 @@ func periodicallyUpdateThreadsAndStopStatus(pcWrapper *producerConsumerWrapper, 
 		}
 
 		settings, err := utils.LoadTransferSettings()
-		if err != nil || settings == nil {
+		if err != nil {
 			log.Error(err)
-			return
+			continue
+		}
+		if settings == nil {
+			continue
 		}
 
 		updateWorkerThreads(*settings, pcWrapper, buildInfoRepo)
