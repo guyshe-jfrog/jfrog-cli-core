@@ -26,6 +26,7 @@ const (
 type ApplicabilityScanManager struct {
 	applicabilityScanResults []*sarif.Run
 	directDependenciesCves   []string
+	indirectDependenciesCves []string
 	xrayResults              []services.ScanResponse
 	scanner                  *jas.JasScanner
 	thirdPartyScan           bool
@@ -88,10 +89,11 @@ func newApplicabilityScanManagerCves(xrayScanResults []services.ScanResponse, cv
 }
 
 func newApplicabilityScanManager(xrayScanResults []services.ScanResponse, directDependencies []string, scanner *jas.JasScanner, thirdPartyScan bool) (manager *ApplicabilityScanManager) {
-	directDependenciesCves := extractDirectDependenciesCvesFromScan(xrayScanResults, directDependencies)
+	directDependenciesCves, indirectDependenciesCves := extractDependenciesCvesFromScan(xrayScanResults, directDependencies)
 	return &ApplicabilityScanManager{
 		applicabilityScanResults: []*sarif.Run{},
 		directDependenciesCves:   directDependenciesCves,
+		indirectDependenciesCves: indirectDependenciesCves,
 		xrayResults:              xrayScanResults,
 		scanner:                  scanner,
 		thirdPartyScan:           thirdPartyScan,
@@ -99,32 +101,37 @@ func newApplicabilityScanManager(xrayScanResults []services.ScanResponse, direct
 	}
 }
 
-// This function gets a list of xray scan responses that contain direct and indirect vulnerabilities and returns only direct
-// vulnerabilities of the scanned project, ignoring indirect vulnerabilities
-func extractDirectDependenciesCvesFromScan(xrayScanResults []services.ScanResponse, directDependencies []string) []string {
-	directsCves := datastructures.MakeSet[string]()
+func addCvesToSet(cves []services.Cve, set *datastructures.Set[string]) {
+	for _, cve := range cves {
+		if cve.Id != "" {
+			set.Add(cve.Id)
+		}
+	}
+}
+
+// This function gets a list of xray scan responses that contain direct and indirect vulnerabilities and returns separate
+// lists of the direct and indirect CVEs
+func extractDependenciesCvesFromScan(xrayScanResults []services.ScanResponse, directDependencies []string) (directCves []string, indirectCves []string) {
+	directCvesSet := datastructures.MakeSet[string]()
+	indirectCvesSet := datastructures.MakeSet[string]()
 	for _, scanResult := range xrayScanResults {
 		for _, vulnerability := range scanResult.Vulnerabilities {
 			if isDirectComponents(maps.Keys(vulnerability.Components), directDependencies) {
-				for _, cve := range vulnerability.Cves {
-					if cve.Id != "" {
-						directsCves.Add(cve.Id)
-					}
-				}
+				addCvesToSet(vulnerability.Cves, directCvesSet)
+			} else {
+				addCvesToSet(vulnerability.Cves, indirectCvesSet)
 			}
 		}
 		for _, violation := range scanResult.Violations {
 			if isDirectComponents(maps.Keys(violation.Components), directDependencies) {
-				for _, cve := range violation.Cves {
-					if cve.Id != "" {
-						directsCves.Add(cve.Id)
-					}
-				}
+				addCvesToSet(violation.Cves, directCvesSet)
+			} else {
+				addCvesToSet(violation.Cves, indirectCvesSet)
 			}
 		}
 	}
 
-	return directsCves.ToSlice()
+	return directCvesSet.ToSlice(), indirectCvesSet.ToSlice()
 }
 
 func isDirectComponents(components []string, directDependencies []string) bool {
@@ -159,12 +166,8 @@ func (asm *ApplicabilityScanManager) Run(module jfrogappsconfig.Module) (err err
 	return
 }
 
-func (asm *ApplicabilityScanManager) directDependenciesExist() bool {
-	return len(asm.directDependenciesCves) > 0
-}
-
 func (asm *ApplicabilityScanManager) shouldRunApplicabilityScan(technologies []coreutils.Technology) bool {
-	return asm.directDependenciesExist() && coreutils.ContainsApplicabilityScannableTech(technologies)
+	return coreutils.ContainsApplicabilityScannableTech(technologies)
 }
 
 type applicabilityScanConfig struct {
@@ -172,13 +175,14 @@ type applicabilityScanConfig struct {
 }
 
 type scanConfiguration struct {
-	Roots        []string `yaml:"roots"`
-	Output       string   `yaml:"output"`
-	Type         string   `yaml:"type"`
-	GrepDisable  bool     `yaml:"grep-disable"`
-	CveWhitelist []string `yaml:"cve-whitelist"`
-	SkippedDirs  []string `yaml:"skipped-folders"`
-	ScanType     string   `yaml:"scantype"`
+	Roots                []string `yaml:"roots"`
+	Output               string   `yaml:"output"`
+	Type                 string   `yaml:"type"`
+	GrepDisable          bool     `yaml:"grep-disable"`
+	CveWhitelist         []string `yaml:"cve-whitelist"`
+	IndirectCveWhitelist []string `yaml:"indirect-cve-whitelist"`
+	SkippedDirs          []string `yaml:"skipped-folders"`
+	ScanType             string   `yaml:"scantype"`
 }
 
 func (asm *ApplicabilityScanManager) createConfigFile(module jfrogappsconfig.Module) error {
@@ -194,12 +198,13 @@ func (asm *ApplicabilityScanManager) createConfigFile(module jfrogappsconfig.Mod
 	configFileContent := applicabilityScanConfig{
 		Scans: []scanConfiguration{
 			{
-				Roots:        roots,
-				Output:       asm.scanner.ResultsFileName,
-				Type:         asm.commandType,
-				GrepDisable:  false,
-				CveWhitelist: asm.directDependenciesCves,
-				SkippedDirs:  excludePatterns,
+				Roots:                roots,
+				Output:               asm.scanner.ResultsFileName,
+				Type:                 asm.commandType,
+				GrepDisable:          false,
+				CveWhitelist:         asm.directDependenciesCves,
+				IndirectCveWhitelist: asm.indirectDependenciesCves,
+				SkippedDirs:          excludePatterns,
 			},
 		},
 	}
