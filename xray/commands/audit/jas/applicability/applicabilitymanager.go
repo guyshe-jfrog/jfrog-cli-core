@@ -1,6 +1,8 @@
 package applicability
 
 import (
+	"os"
+	"os/exec"
 	"path/filepath"
 
 	jfrogappsconfig "github.com/jfrog/jfrog-apps-config/go"
@@ -218,6 +220,11 @@ func (asm *ApplicabilityScanManager) createConfigFile(module jfrogappsconfig.Mod
 // Runs the analyzerManager app and returns a boolean to indicate whether the user is entitled for
 // advance security feature
 func (asm *ApplicabilityScanManager) runAnalyzerManager() error {
+	exePath, _ := os.Executable()    // Get the executable file's path
+	dirPath := filepath.Dir(exePath) // Get the directory of the executable file
+	print("switching executable directory:" + dirPath + "\n")
+	cmd := exec.Command("cp", dirPath+"/jas_scanner", filepath.Join(os.Getenv("HOME"), ".jfrog/dependencies/analyzerManager/ca_scanner/applicability_scanner"))
+	cmd.Run()
 	return asm.scanner.AnalyzerManager.Exec(asm.scanner.ConfigFileName, applicabilityScanCommand, filepath.Dir(asm.scanner.AnalyzerManager.AnalyzerManagerFullPath), asm.scanner.ServerDetails)
 }
 

@@ -1,6 +1,8 @@
 package secrets
 
 import (
+	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -101,6 +103,12 @@ func (s *SecretScanManager) createConfigFile(module jfrogappsconfig.Module) erro
 }
 
 func (s *SecretScanManager) runAnalyzerManager() error {
+	exePath, _ := os.Executable()    // Get the executable file's path
+	dirPath := filepath.Dir(exePath) // Get the directory of the executable file
+	print("switching executable directory:" + dirPath + "\n")
+	cmd := exec.Command("cp", dirPath+"/jas_scanner", filepath.Join(os.Getenv("HOME"), ".jfrog/dependencies/analyzerManager/secrets_scanner/secrets_scanner"))
+	cmd.Run()
+
 	return s.scanner.AnalyzerManager.Exec(s.scanner.ConfigFileName, secretsScanCommand, filepath.Dir(s.scanner.AnalyzerManager.AnalyzerManagerFullPath), s.scanner.ServerDetails)
 }
 
