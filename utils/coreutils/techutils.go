@@ -179,6 +179,11 @@ func (tech Technology) GetPackageInstallationCommand() string {
 }
 
 func (tech Technology) ApplicabilityScannable() bool {
+	print("Is it scannable?\n")
+	print(tech)
+	print("\ntechnologiesData[tech].applicabilityScannable\n")
+	print(technologiesData[tech].applicabilityScannable)
+	print("\n")
 	return technologiesData[tech].applicabilityScannable
 }
 
@@ -471,6 +476,9 @@ func GetAllTechnologiesList() (technologies []Technology) {
 
 func ContainsApplicabilityScannableTech(technologies []Technology) bool {
 	for _, technology := range technologies {
+		print("technology\n")
+		print(technology)
+		print("\n")
 		if technology.ApplicabilityScannable() {
 			return true
 		}
